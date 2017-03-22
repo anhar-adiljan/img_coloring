@@ -11,6 +11,11 @@ from vgg16 import vgg16
 from scipy.misc import imread, imresize
 from skimage import io, color
 
+filenames = sorted(glob.glob("../colornet-master/*/*.png"))
+batch_size = 1
+num_epochs = 1e+9
+learning_rate = 1e-4
+
 class colornet:
 	# Shape: gray_imgs ?x224x224x1, slic_img ?x224x224x3
 	def __init__(self, gray_imgs, slic_imgs=None, vgg_weights=None, sess=None):
@@ -65,6 +70,32 @@ class colornet:
 		#return tf.nn.batch_norm_with_global_normalization(x, mean, variance)
 		return tf.contrib.layers.batch_norm(x)
 
+def network(gray, weights=None):
+	return colornet(gray, vgg_weights=weights).uv_out
+
+# Load pre-trained VGG weights
+weights = None
+
+# Construct Model
+imgs_uv = tf.placeholder(tf.float32, [None, 224, 224, 2])
+imgs = tf.placeholder(tf.float32, [None, 224, 224, 1])
+net = network(imgs, weights)
+
+# define loss and optimizer
+loss = tf.nn.l2_loss(tf.sub(net.uv_output, imgs_uv))
+optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
+
+# Initialize the variables
+init = tf.global_variables_initializer()
+
+# Load the images and convert them into matrices needed
+
+# Launch the graph
+with tf.Session() as sess:
+	sess.run(init)
+	
+
+'''
 imgs = tf.placeholder(tf.float32, [None, 224, 224, 1])
 net = colornet(imgs)
 img1 = imread('laska.png', mode='RGB')
@@ -84,5 +115,6 @@ with tf.Session() as sess:
 		print(yuv.shape)
 		rgb = color.luv2rgb(yuv)
 		io.imsave('output.png', rgb)
+'''
 		
 		
