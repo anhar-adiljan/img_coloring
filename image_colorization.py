@@ -6,15 +6,16 @@ Tensorflow implemenation of Image colorization using Adversarial loss
 
 import tensorflow as tf
 import numpy as np
-import scipy as sp
 import glob
+import os
 from vgg16 import vgg16
 from scipy.misc import imread, imresize
-from skimage import io, color, transform
+from skimage import io, color 
 
 batch_size = 5
-num_epochs = 20
-learning_rate = 1e-2
+num_epochs = 3
+learning_rate = 1e-3
+display_step = 1
 
 class colornet:
 	# Shape: gray_imgs ?x224x224x1, slic_img ?x224x224x3
@@ -72,6 +73,12 @@ class colornet:
 def network(gray, weights=None):
 	return colornet(gray, vgg_weights=weights).uv_output
 
+def write_imgs(out_imgs, epoch):
+	filepath = 'test-output/epoch' + str(epoch) + '/'
+	os.mkdir(filepath)
+	for i in range(len(out_imgs)):
+		io.imsave(filepath + 'test_out' + str(i) + '.png', out_imgs[i])
+
 # Load pre-trained VGG weights
 weights = 'vgg16_weights.npz'
 
@@ -88,57 +95,103 @@ optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 init = tf.global_variables_initializer()
 
 # Load the images
-filepath = 'tiny-imagenet-200/train/n09193705/images/*.JPEG'
-images = []
+print("Loading training set...")
+filepath = 'tiny-imagenet-200/val/images/*.JPEG'
+tr_images = []
+tr_n = 100
+i = 0
 for filename in glob.glob(filepath):
-	image = imread(filename, mode='RGB')
-	image = imresize(image, (224,224))
-	images.append(image)
-n = len(images)
-images = np.array(images)
-'''
-# Convert the images into LUV color space
-for i in range(len(imageCollection)):
-	image = np.asarray(imresize(imageCollection[i], (224,224)))
-	print(i)
-	print(image.shape)
-	image_luv = color.rgb2luv(image)
-	images.append(image)
-'''
-images_luv = color.rgb2luv(images)
-images_l = images_luv[:,:,:,0]
+	if i < tr_n:
+		tr_image = imread(filename, mode='RGB')
+		tr_image = imresize(tr_image, (224,224))
+		tr_images.append(tr_image)
+		i += 1
+	else:
+		 break
+tr_images = np.array(tr_images)
+tr_images = color.rgb2luv(tr_images)
+tr_images_l = tr_images[:,:,:,0]
 # images_l -- to feed in imgs
 # images_uv -- to feed in imgs_uv
-images_l = images_l.reshape(images_l.shape + (1,))
-images_uv = images_luv[:,:,:,1:3]
-print(n)
-print(images_l.shape)
-print(images_uv.shape)
+tr_images_l = tr_images_l.reshape(tr_images_l.shape + (1,))
+tr_images_uv = tr_images[:,:,:,1:]
+print("Training set loaded!\n")
+
+print("Loading test set...")
+filepath = 'tiny-imagenet-200/test/images/*.JPEG'
+tst_images = []
+tst_n = 10
+i = 0
+for filename in sorted(glob.glob(filepath)):
+	if i < tst_n:
+		tst_image = imread(filename, mode='RGB')
+		tst_image = imresize(tst_image, (224,224))
+		tst_images.append(tst_image)
+		i += 1
+	else:
+		break
+tst_images = np.array(tst_images)
+tst_images = color.rgb2luv(tst_images)
+tst_images_l = tst_images[:,:,:,0]
+tst_images_l = tst_images_l.reshape(tst_images_l.shape + (1,))
+tst_images_uv = tst_images[:,:,:,1:]
+print("Test set loaded!\n")
 
 # Launch the graph
 with tf.Session() as sess:
 	sess.run(init)
 	tr_losses = []
-	print("Training begin")
+	tst_losses = []
+	print("Training begins...")
 	for epoch in range(num_epochs):
 		# print("Epoch:", '%02d' % (epoch+1))
 		avg_cost = 0.
-		total_batch = int(n/batch_size)
-		for i in range(total_batch):
-			batch_l = images_l[i*batch_size:(i+1)*batch_size]
-			batch_uv = images_uv[i*batch_size:(i+1)*batch_size]
+		total_tr_batch = int(tr_n/batch_size)
+		for i in range(total_tr_batch):
+			batch_l = tr_images_l[i*batch_size:(i+1)*batch_size]
+			batch_uv = tr_images_uv[i*batch_size:(i+1)*batch_size]
 			_, c = sess.run([optimizer, loss], feed_dict={imgs: batch_l, imgs_uv: batch_uv})
 			# Compute average cost
-			avg_cost += c / total_batch
-			print("Number of batches finished:", '%02d' % (i+1))
-		avg_cost/=(224*224)
+			avg_cost += c / total_tr_batch
+			if (i+1) % display_step == 0:
+				print("Number of batches finished:", '%02d' % (i+1))
+		avg_cost /= (224*224)
 		tr_losses.append(avg_cost)
-		out_uv =  sess.run(net, feed_dict={imgs: [images_l[0]]})
-		out_img = color.luv2rgb(np.concatenate((images_l[0], out_uv[0]), 2))
-		filename = 'result' + str(epoch) + '.png'
-		io.imsave(filename, out_img)
-		print("Epoch:", '%02d' % (epoch+1), "Training loss:", "{:.3f}".format(avg_cost))
+		avg_cost = 0.
+		print("Calculating test loss for epoch " + str(epoch))
+		total_tst_batch = int(tst_n/batch_size)
+		for i in range(total_tst_batch):
+			batch_l = tst_images_l[i*batch_size:(i+1)*batch_size]
+			batch_uv = tst_images_uv[i*batch_size:(i+1)*batch_size]
+			_, c = sess.run([optimizer, loss], feed_dict={imgs: batch_l, imgs_uv: batch_uv})
+			# Compute average lost
+			avg_cost += c / total_tst_batch
+		avg_cost /= (224*224)
+		tst_losses.append(avg_cost)
+		print("Epoch:", '%02d' % (epoch+1), "Training loss:", "{:.3f}".format(tr_losses[-1]), "Test loss:", "{:.3f}".format(tst_losses[-1]))
+		print("Writing test output to files...")
+		out_uv = []
+		for i in range(total_tst_batch):
+			batch_l = tst_images_l[i*batch_size:(i+1)*batch_size]
+			batch_out_uv =  sess.run(net, feed_dict={imgs: batch_l})
+			out_uv.append(batch_out_uv)
+		out_uv = np.concatenate(out_uv, axis=0)
+		print(tst_images_l.shape)
+		print(out_uv.shape)
+		out_imgs_luv = np.concatenate((tst_images_l, out_uv), axis=3)
+		out_imgs = []
+		for i in range(len(out_imgs_luv)):
+			out_imgs.append(color.luv2rgb(out_imgs_luv[i]))
+		out_imgs = np.array(out_imgs)
+		print(out_imgs.shape)
+		write_imgs(out_imgs, epoch)
+		print("Output written to files!")
 	print("Optimization finished!")
+
+	# save training and test losses to file
+	loss_filename = 'loss.txt'
+	np.savetxt('tr_losses.txt', tr_losses)
+	np.savetxt('tst_losses.txt', tst_losses)
 
 '''
 imgs = tf.placeholder(tf.float32, [None, 224, 224, 1])
