@@ -9,11 +9,10 @@ import numpy as np
 import scipy as sp
 from vgg16 import vgg16
 from scipy.misc import imread, imresize
-from skimage import io, color
+from skimage import io, color, transform
 
-filenames = sorted(glob.glob("../colornet-master/*/*.png"))
-batch_size = 1
-num_epochs = 1e+9
+batch_size = 5
+num_epochs = 10
 learning_rate = 1e-4
 
 class colornet:
@@ -71,7 +70,7 @@ class colornet:
 		return tf.contrib.layers.batch_norm(x)
 
 def network(gray, weights=None):
-	return colornet(gray, vgg_weights=weights).uv_out
+	return colornet(gray, vgg_weights=weights).uv_output
 
 # Load pre-trained VGG weights
 weights = None
@@ -82,18 +81,50 @@ imgs = tf.placeholder(tf.float32, [None, 224, 224, 1])
 net = network(imgs, weights)
 
 # define loss and optimizer
-loss = tf.nn.l2_loss(tf.sub(net.uv_output, imgs_uv))
+loss = tf.nn.l2_loss(tf.sub(net, imgs_uv))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
 # Initialize the variables
 init = tf.global_variables_initializer()
 
-# Load the images and convert them into matrices needed
+# Load the images
+imageCollection = io.imread_collection('tiny-imagenet-200/train/n01443537/images/*.JPEG')
+images = []
+#images = imresize(images, (224,224))
+for i in range(len(imageCollection)):
+	images.append(imresize(imageCollection[i], (224,224)))
+#images = images.concatenate()
+images = np.array(images)
+n = len(images)
+print(images[0,22,24,0:3])
+# Convert the images into LUV color space
+images_luv = color.rgb2luv(images)
+images_l = images_luv[:,:,:,0]
+# images_l -- to feed in imgs
+# images_uv -- to feed in imgs_uv
+images_l = images_l.reshape(images_l.shape + (1,))
+images_uv = images_luv[:,:,:,1:3]
 
 # Launch the graph
 with tf.Session() as sess:
 	sess.run(init)
-	
+	tr_losses = []
+	for epoch in range(num_epochs):
+		avg_cost = 0.
+		total_batch = int(n/batch_size)
+		for i in range(total_batch):
+			batch_l = images_l[i*batch_size:(i+1)*batch_size]
+			batch_uv = images_uv[i*batch_size:(i+1)*batch_size]
+			_, c = sess.run([optimizer, loss], feed_dict={imgs: batch_l, imgs_uv: batch_uv})
+			# Compute average cost
+			avg_cost += c / total_batch
+		tr_losses.append(avg_cost)
+		out_uv =  sess.run(net, feed_dict={imgs: [images_l[0]]})
+		out_img = color.luv2rgb(np.concatenate((images_l[0], out_uv[0]), 2))
+		filename = 'result' + str(epoch) + '.png'
+		io.imsave(filename, out_img)
+		print("Epoch:", '%02d' % epoch+1, "Training loss:", "{:.9f}".format(avg_lost), "out_img.shape:", out_img.shape)
+	print("Optimization finished!")
 
 '''
 imgs = tf.placeholder(tf.float32, [None, 224, 224, 1])
