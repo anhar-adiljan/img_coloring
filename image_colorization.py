@@ -12,10 +12,10 @@ from vgg16 import vgg16
 from scipy.misc import imread, imresize
 from skimage import io, color 
 
-batch_size = 5
-num_epochs = 100
-learning_rate = 1e-2
-display_step = 10
+batch_size = 10
+num_epochs = 200
+learning_rate = 1e-3
+display_step = 20
 
 class colornet:
 	# Shape: gray_imgs ?x224x224x1, slic_img ?x224x224x3
@@ -88,7 +88,7 @@ imgs = tf.placeholder(tf.float32, [None, 224, 224, 1])
 net = network(imgs, weights)
 
 # define loss and optimizer
-loss = tf.nn.l2_loss(tf.subtract(net, imgs_uv))
+loss = tf.reduce_mean(tf.nn.l2_loss(tf.subtract(net, imgs_uv)))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
 # Initialize the variables
@@ -99,7 +99,7 @@ print("Loading images...")
 filepath = 'flower_photos/*/*.jpg'
 tr_images = []
 tst_images = []
-tr_n = 3500
+tr_n = 2000
 tst_n = 100
 i = 0
 j = 0
@@ -130,8 +130,8 @@ tst_n = len(tst_images)
 tst_images = np.array(tst_images)
 filepath = 'test-output/ref/'
 os.mkdir(filepath)
-for i in range(len(out_imgs)):
-	io.imsave(filepath + 'ref' + str(i) + '.png', out_imgs[i])
+for i in range(len(tst_images)):
+	io.imsave(filepath + 'ref' + str(i) + '.png', tst_images[i])
 tst_images = color.rgb2luv(tst_images)
 tst_images_l = tst_images[:,:,:,0]
 tst_images_l = tst_images_l.reshape(tst_images_l.shape + (1,))
