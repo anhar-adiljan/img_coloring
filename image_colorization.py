@@ -7,6 +7,7 @@ Tensorflow implemenation of Image colorization using Adversarial loss
 import tensorflow as tf
 import numpy as np
 import scipy as sp
+import glob
 from vgg16 import vgg16
 from scipy.misc import imread, imresize
 from skimage import io, color, transform
@@ -87,23 +88,32 @@ optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 init = tf.global_variables_initializer()
 
 # Load the images
-imageCollection = io.imread_collection('tiny-imagenet-200/train/n09193705/images/*.JPEG')
-images = np.array([])
-print (len(imageCollection))
-#images = imresize(images, (224,224))
-for i in range(len(imageCollection)):
-	np.append(images,imresize(imageCollection[i], (224,224)))
-#images = images.concatenate()
+filepath = 'tiny-imagenet-200/train/n09193705/images/*.JPEG'
+images = []
+for filename in glob.glob(filepath):
+	image = imread(filename, mode='RGB')
+	image = imresize(image, (224,224))
+	images.append(image)
 n = len(images)
-print(images.shape)
-print(images[0,22,24,0:3])
+images = np.array(images)
+'''
 # Convert the images into LUV color space
+for i in range(len(imageCollection)):
+	image = np.asarray(imresize(imageCollection[i], (224,224)))
+	print(i)
+	print(image.shape)
+	image_luv = color.rgb2luv(image)
+	images.append(image)
+'''
 images_luv = color.rgb2luv(images)
 images_l = images_luv[:,:,:,0]
 # images_l -- to feed in imgs
 # images_uv -- to feed in imgs_uv
 images_l = images_l.reshape(images_l.shape + (1,))
 images_uv = images_luv[:,:,:,1:3]
+print(n)
+print(images_l.shape)
+print(images_uv.shape)
 
 # Launch the graph
 with tf.Session() as sess:
@@ -120,7 +130,7 @@ with tf.Session() as sess:
 			_, c = sess.run([optimizer, loss], feed_dict={imgs: batch_l, imgs_uv: batch_uv})
 			# Compute average cost
 			avg_cost += c / total_batch
-			# print("Number of batches finished:", '%02d' % (i+1))
+			print("Number of batches finished:", '%02d' % (i+1))
 		avg_cost/=(224*224)
 		tr_losses.append(avg_cost)
 		out_uv =  sess.run(net, feed_dict={imgs: [images_l[0]]})
