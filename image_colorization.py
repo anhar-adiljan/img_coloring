@@ -15,7 +15,7 @@ from skimage import io, color
 batch_size = 5
 num_epochs = 20
 learning_rate = 1e-2
-display_step = 100
+display_step = 10
 
 class colornet:
 	# Shape: gray_imgs ?x224x224x1, slic_img ?x224x224x3
@@ -73,11 +73,13 @@ class colornet:
 def network(gray, weights=None):
 	return colornet(gray, vgg_weights=weights).uv_output
 
-def write_imgs(out_imgs, epoch):
+def write_imgs(out_imgs, tst_imgs, epoch):
 	filepath = 'test-output/epoch' + str(epoch) + '/'
 	os.mkdir(filepath)
 	for i in range(len(out_imgs)):
 		io.imsave(filepath + 'test_out' + str(i) + '.png', out_imgs[i])
+	for i in range(len(tst_imgs)):
+		io.imsave(filepath + 'ref' + str(i) + '.png', tst_imgs[i])
 
 # Load pre-trained VGG weights
 weights = 'vgg16_weights.npz'
@@ -95,10 +97,51 @@ optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 init = tf.global_variables_initializer()
 
 # Load the images
-print("Loading training set...")
-filepath = 'tiny-imagenet-200/val/images/*.JPEG'
+print("Loading images...")
+filepath = 'flower_photos/*/*.jpg'
 tr_images = []
-tr_n = 2000
+tst_images = []
+tr_n = 1000
+tst_n = 20
+i = 0
+j = 0
+for filename in glob.glob(filepath):
+	if i < tr_n:
+		tr_image = imread(filename, mode='RGB')
+		tr_image = imresize(tr_image, (224,224))
+		tr_images.append(tr_image)
+		i += 1
+	elif j < tst_n:
+		tst_image = imread(filename, mode='RGB')
+		tst_image = imresize(tst_image, (224,224))
+		tst_images.append(tst_image)
+		j += 1
+	else:
+		break
+
+tr_n = len(tr_images)
+tr_images = np.array(tr_images)
+tr_images = color.rgb2luv(tr_images)
+tr_images_l = tr_images[:,:,:,0]
+# images_l -- to feed in imgs
+# images_uv -- to feed in imgs_uv
+tr_images_l = tr_images_l.reshape(tr_images_l.shape + (1,))
+tr_images_uv = tr_images[:,:,:,1:]
+
+tst_n = len(tst_images)
+tst_images = np.array(tst_images)
+tst_images = color.rgb2luv(tst_images)
+tst_images_l = tst_images[:,:,:,0]
+tst_images_l = tst_images_l.reshape(tst_images_l.shape + (1,))
+tst_images_uv = tst_images[:,:,:,1:]
+
+print("Training and test images loaded!")
+'''
+print("Loading training set...")
+#filepath = 'tiny-imagenet-200/val/images/*.JPEG'
+filepath = 'helen_1/'
+tr_images = []
+tr_n = 1000
 i = 0
 for filename in glob.glob(filepath):
 	if i < tr_n:
@@ -136,6 +179,7 @@ tst_images_l = tst_images[:,:,:,0]
 tst_images_l = tst_images_l.reshape(tst_images_l.shape + (1,))
 tst_images_uv = tst_images[:,:,:,1:]
 print("Test set loaded!\n")
+'''
 
 # Launch the graph
 with tf.Session() as sess:
@@ -183,15 +227,20 @@ with tf.Session() as sess:
 		for i in range(len(out_imgs_luv)):
 			out_imgs.append(color.luv2rgb(out_imgs_luv[i]))
 		out_imgs = np.array(out_imgs)
-		print(out_imgs.shape)
-		write_imgs(out_imgs, epoch)
-		print("Output written to files!")
+		tst_imgs = []
+		for i in range(len(tst_images)):
+			tst_imgs.append(color.luv2rgb(tst_images[i]))
+		#print(out_imgs.shape)
+		tst_imgs = np.array(tst_imgs)
+		write_imgs(out_imgs, tst_imgs, epoch)
+		print("Output written to files!\n")
+		# save training and test losses to file
+		print("Writing current training and test losses to files\n")
+		loss_filename = 'loss.txt'
+		np.savetxt('tr_losses.txt', tr_losses)
+		np.savetxt('tst_losses.txt', tst_losses)
 	print("Optimization finished!")
 
-	# save training and test losses to file
-	loss_filename = 'loss.txt'
-	np.savetxt('tr_losses.txt', tr_losses)
-	np.savetxt('tst_losses.txt', tst_losses)
 
 '''
 imgs = tf.placeholder(tf.float32, [None, 224, 224, 1])
