@@ -13,9 +13,9 @@ from scipy.misc import imread, imresize
 from skimage import io, color 
 
 batch_size = 5
-num_epochs = 3
-learning_rate = 1e-3
-display_step = 1
+num_epochs = 20
+learning_rate = 1e-2
+display_step = 100
 
 class colornet:
 	# Shape: gray_imgs ?x224x224x1, slic_img ?x224x224x3
@@ -98,7 +98,7 @@ init = tf.global_variables_initializer()
 print("Loading training set...")
 filepath = 'tiny-imagenet-200/val/images/*.JPEG'
 tr_images = []
-tr_n = 100
+tr_n = 2000
 i = 0
 for filename in glob.glob(filepath):
 	if i < tr_n:
@@ -120,7 +120,7 @@ print("Training set loaded!\n")
 print("Loading test set...")
 filepath = 'tiny-imagenet-200/test/images/*.JPEG'
 tst_images = []
-tst_n = 10
+tst_n = 100
 i = 0
 for filename in sorted(glob.glob(filepath)):
 	if i < tst_n:
@@ -144,7 +144,7 @@ with tf.Session() as sess:
 	tst_losses = []
 	print("Training begins...")
 	for epoch in range(num_epochs):
-		# print("Epoch:", '%02d' % (epoch+1))
+		print("Epoch:", '%02d' % (epoch+1))
 		avg_cost = 0.
 		total_tr_batch = int(tr_n/batch_size)
 		for i in range(total_tr_batch):
@@ -163,7 +163,7 @@ with tf.Session() as sess:
 		for i in range(total_tst_batch):
 			batch_l = tst_images_l[i*batch_size:(i+1)*batch_size]
 			batch_uv = tst_images_uv[i*batch_size:(i+1)*batch_size]
-			_, c = sess.run([optimizer, loss], feed_dict={imgs: batch_l, imgs_uv: batch_uv})
+			c = sess.run(loss, feed_dict={imgs: batch_l, imgs_uv: batch_uv})
 			# Compute average lost
 			avg_cost += c / total_tst_batch
 		avg_cost /= (224*224)
