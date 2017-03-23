@@ -13,7 +13,7 @@ from scipy.misc import imread, imresize
 from skimage import io, color 
 
 batch_size = 5
-num_epochs = 20
+num_epochs = 100
 learning_rate = 1e-2
 display_step = 10
 
@@ -73,13 +73,11 @@ class colornet:
 def network(gray, weights=None):
 	return colornet(gray, vgg_weights=weights).uv_output
 
-def write_imgs(out_imgs, tst_imgs, epoch):
+def write_imgs(out_imgs, epoch):
 	filepath = 'test-output/epoch' + str(epoch) + '/'
 	os.mkdir(filepath)
 	for i in range(len(out_imgs)):
 		io.imsave(filepath + 'test_out' + str(i) + '.png', out_imgs[i])
-	for i in range(len(tst_imgs)):
-		io.imsave(filepath + 'ref' + str(i) + '.png', tst_imgs[i])
 
 # Load pre-trained VGG weights
 weights = 'vgg16_weights.npz'
@@ -101,8 +99,8 @@ print("Loading images...")
 filepath = 'flower_photos/*/*.jpg'
 tr_images = []
 tst_images = []
-tr_n = 1000
-tst_n = 20
+tr_n = 3500
+tst_n = 100
 i = 0
 j = 0
 for filename in glob.glob(filepath):
@@ -130,6 +128,10 @@ tr_images_uv = tr_images[:,:,:,1:]
 
 tst_n = len(tst_images)
 tst_images = np.array(tst_images)
+filepath = 'test-output/ref/'
+os.mkdir(filepath)
+for i in range(len(out_imgs)):
+	io.imsave(filepath + 'ref' + str(i) + '.png', out_imgs[i])
 tst_images = color.rgb2luv(tst_images)
 tst_images_l = tst_images[:,:,:,0]
 tst_images_l = tst_images_l.reshape(tst_images_l.shape + (1,))
@@ -232,7 +234,7 @@ with tf.Session() as sess:
 			tst_imgs.append(color.luv2rgb(tst_images[i]))
 		#print(out_imgs.shape)
 		tst_imgs = np.array(tst_imgs)
-		write_imgs(out_imgs, tst_imgs, epoch)
+		write_imgs(out_imgs, epoch)
 		print("Output written to files!\n")
 		# save training and test losses to file
 		print("Writing current training and test losses to files\n")
