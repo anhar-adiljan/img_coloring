@@ -27,37 +27,38 @@ class colornet:
 		self.uplayers()
 	
 	def uplayers(self):
-		with tf.name_scope('conv4_3') as scope:
+		with tf.name_scope('uplayer') as scope:
+		#with tf.name_scope('conv4_3') as scope:
 			#perform batch normalization on self.gray_vgg.conv4_3, 1x1 convolution, then upscale
 			kernel = tf.Variable(tf.truncated_normal([1,1,512,256], dtype=tf.float32, stddev=1e-1))
-			# input 28x28x512; output 56x56x256
+			#input 28x28x512; output 56x56x256
 			self.upconv4_3 = tf.nn.conv2d(self.normalize(self.gray_vgg.conv4_3), kernel, [1,1,1,1], padding='SAME')
 			self.upconv4_3 = tf.image.resize_bilinear(self.upconv4_3, (56,56))
 		
-		with tf.name_scope('conv3_3') as scope:
+		#with tf.name_scope('conv3_3') as scope:
 			#perform batch normalization on self.gray_vgg.conv3_3, 3x3 convolution, then upscale
 			bn_conv3_3 = self.normalize(self.gray_vgg.conv3_3)
 			kernel = tf.Variable(tf.truncated_normal([3,3,256,128], dtype=tf.float32, stddev=1e-1))
-			# input 56x56x256; output 112x112x128
+			#input 56x56x256; output 112x112x128
 			self.upconv3_3 = tf.nn.conv2d(tf.add(bn_conv3_3, self.upconv4_3), kernel, [1,1,1,1], padding='SAME')
 			self.upconv3_3 = tf.image.resize_bilinear(self.upconv3_3, (112,112))
 			
-		with tf.name_scope('conv2_2') as scope:
+		#with tf.name_scope('conv2_2') as scope:
 			#perform batch normalization on self.gray_vgg.conv2_2, 3x3 convolution, then upscale
 			bn_conv2_2 = self.normalize(self.gray_vgg.conv2_2)
 			kernel = tf.Variable(tf.truncated_normal([3,3,128,64], dtype=tf.float32, stddev=1e-1))
-			# input 112x112x128; output 224x224x64
+			#input 112x112x128; output 224x224x64
 			self.upconv2_2 = tf.nn.conv2d(tf.add(bn_conv2_2, self.upconv3_3), kernel, [1,1,1,1], padding='SAME')
 			self.upconv2_2 = tf.image.resize_bilinear(self.upconv2_2, (224,224))
 
-		with tf.name_scope('conv1_2') as scope:
+		#with tf.name_scope('conv1_2') as scope:
 			#perform batch normalization on self.gray_vgg.conv1_2, 3x3 convolution, no upscale
 			bn_conv1_2 = self.normalize(self.gray_vgg.conv1_2)
 			kernel = tf.Variable(tf.truncated_normal([3,3,64,3], dtype=tf.float32, stddev=1e-1))
-			# input 224x224x64; output 224x224x3
+		#input 224x224x64; output 224x224x3
 			self.upconv1_2 = tf.nn.conv2d(tf.add(bn_conv1_2, self.upconv2_2), kernel, [1,1,1,1], padding='SAME')
 		
-		with tf.name_scope('output') as scope:
+		#with tf.name_scope('output') as scope:
 			#perform batch normalization on gray_vgg_input, two 3x3 convolution
 			bn_input = self.normalize(tf.concat([self.gray_imgs, self.gray_imgs, self.gray_imgs],3))
 			kernel = tf.Variable(tf.truncated_normal([3,3,3,3], dtype=tf.float32, stddev=1e-1))
