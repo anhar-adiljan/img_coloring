@@ -1,5 +1,6 @@
 *.npz
 *.png
+*.txt
 /tiny-imagenet-200
 /face
 /flower_photos
