@@ -13,14 +13,14 @@ from scipy.misc import imread, imresize
 from skimage import io, color 
 from skimage.segmentation import slic
 
-batch_size = 5
-num_epochs = 20
+batch_size = 10
+num_epochs = 200
 learning_rate = 1e-3
-display_step = 100
+display_step = 20
 
 class colornet:
 	# Shape: gray_imgs ?x224x224x1, slic_img ?x224x224x3
-	def __init__(self, gray_imgs, slic_imgs, vgg_weights=None):
+	def __init__(self, gray_imgs, slic_imgs=None, vgg_weights=None):
 		self.gray_imgs = gray_imgs
 		self.slic_imgs = slic_imgs
 		gray_vgg_input = tf.concat([self.gray_imgs, self.gray_imgs, self.gray_imgs],3)
@@ -76,7 +76,7 @@ def network(gray, weights=None):
 
 def write_imgs(out_imgs, epoch):
 	filepath = 'test-output/epoch' + str(epoch) + '/'
-	# os.mkdir(filepath)
+	os.mkdir(filepath)
 	for i in range(len(out_imgs)):
 		io.imsave(filepath + 'test_out' + str(i) + '.png', out_imgs[i])
 
@@ -89,17 +89,67 @@ imgs = tf.placeholder(tf.float32, [None, 224, 224, 1])
 net = network(imgs, weights)
 
 # define loss and optimizer
-loss = tf.nn.l2_loss(tf.subtract(net, imgs_uv))
+loss = tf.reduce_mean(tf.nn.l2_loss(tf.subtract(net, imgs_uv)))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
 # Initialize the variables
 init = tf.global_variables_initializer()
 
 # Load the images
-print("Loading training set...")
-filepath = 'tiny-imagenet-200/val/images/*.JPEG'
+print("Loading images...")
+filepath = 'flower_photos/*/*.jpg'
 tr_images = []
+tst_images = []
 tr_n = 2000
+tst_n = 100
+i = 0
+j = 0
+for filename in glob.glob(filepath):
+	if i < tr_n:
+		tr_image = imread(filename, mode='RGB')
+		tr_image = imresize(tr_image, (224,224))
+		tr_images.append(tr_image)
+		i += 1
+	elif j < tst_n:
+		tst_image = imread(filename, mode='RGB')
+		tst_image = imresize(tst_image, (224,224))
+		tst_images.append(tst_image)
+		j += 1
+	else:
+		break
+
+tr_n = len(tr_images)
+tr_images = np.array(tr_images)
+tr_images = color.rgb2luv(tr_images)
+tr_images_l = tr_images[:,:,:,0]
+# images_l -- to feed in imgs
+# images_uv -- to feed in imgs_uv
+tr_images_l = tr_images_l.reshape(tr_images_l.shape + (1,))
+tr_images_uv = tr_images[:,:,:,1:]
+
+tst_n = len(tst_images)
+tst_images = np.array(tst_images)
+filepath = 'test-output/ref/'
+os.mkdir(filepath)
+for i in range(len(tst_images)):
+	io.imsave(filepath + 'ref' + str(i) + '.png', tst_images[i])
+tst_images = color.rgb2luv(tst_images)
+tst_images_l = tst_images[:,:,:,0]
+tst_images_l = tst_images_l.reshape(tst_images_l.shape + (1,))
+tst_images_uv = tst_images[:,:,:,1:]
+
+print("Training and test images loaded!")
+
+# Apply SLIC algorithm on the training set
+tr_images_segments = slic(tr_images)
+print tr_images.shape
+
+'''
+print("Loading training set...")
+#filepath = 'tiny-imagenet-200/val/images/*.JPEG'
+filepath = 'helen_1/'
+tr_images = []
+tr_n = 1000
 i = 0
 for filename in glob.glob(filepath):
 	if i < tr_n:
@@ -110,7 +160,6 @@ for filename in glob.glob(filepath):
 	else:
 		 break
 tr_images = np.array(tr_images)
-tr_slic_images = slic(tr_images)
 tr_images = color.rgb2luv(tr_images)
 tr_images_l = tr_images[:,:,:,0]
 # images_l -- to feed in imgs
@@ -138,6 +187,7 @@ tst_images_l = tst_images[:,:,:,0]
 tst_images_l = tst_images_l.reshape(tst_images_l.shape + (1,))
 tst_images_uv = tst_images[:,:,:,1:]
 print("Test set loaded!\n")
+'''
 
 # Launch the graph
 with tf.Session() as sess:
@@ -165,7 +215,7 @@ with tf.Session() as sess:
 		for i in range(total_tst_batch):
 			batch_l = tst_images_l[i*batch_size:(i+1)*batch_size]
 			batch_uv = tst_images_uv[i*batch_size:(i+1)*batch_size]
-			_, c = sess.run([optimizer, loss], feed_dict={imgs: batch_l, imgs_uv: batch_uv})
+			c = sess.run(loss, feed_dict={imgs: batch_l, imgs_uv: batch_uv})
 			# Compute average lost
 			avg_cost += c / total_tst_batch
 		avg_cost /= (224*224)
@@ -185,15 +235,16 @@ with tf.Session() as sess:
 		for i in range(len(out_imgs_luv)):
 			out_imgs.append(color.luv2rgb(out_imgs_luv[i]))
 		out_imgs = np.array(out_imgs)
-		print(out_imgs.shape)
+		#print(out_imgs.shape)
 		write_imgs(out_imgs, epoch)
-		print("Output written to files!")
+		print("Output written to files!\n")
+		# save training and test losses to file
+		print("Writing current training and test losses to files\n")
+		loss_filename = 'loss.txt'
+		np.savetxt('tr_losses.txt', tr_losses)
+		np.savetxt('tst_losses.txt', tst_losses)
 	print("Optimization finished!")
 
-	# save training and test losses to file
-	loss_filename = 'loss.txt'
-	np.savetxt('tr_losses.txt', tr_losses)
-	np.savetxt('tst_losses.txt', tst_losses)
 
 '''
 imgs = tf.placeholder(tf.float32, [None, 224, 224, 1])
